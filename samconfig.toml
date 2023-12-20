@@ -9,6 +9,7 @@ stack_name = "sam-app"
 [default.build.parameters]
 cached = true
 parallel = true
+use_container = true  # Add this line to enable building inside a Lambda-compatible environment
 
 [default.validate.parameters]
 lint = true
@@ -21,6 +22,7 @@ s3_prefix = "sam-app"
 region = "us-east-2"
 image_repositories = []
 disable_rollback = true
+parameter_overrides = "BucketName=\"log-files\""
 
 [default.package.parameters]
 resolve_s3 = true

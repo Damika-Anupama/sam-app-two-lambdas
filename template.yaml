@@ -3,9 +3,8 @@ Transform: AWS::Serverless-2016-10-31
 Description: >
   sam-app
 
-  Sample SAM Template for sam-app
+  Log tracker application
 
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
     Timeout: 3
@@ -14,29 +13,67 @@ Globals:
     Tracing: Active
   Api:
     TracingEnabled: true
+Parameters:
+  BucketName:
+    Type: String
+    Description: Name of the S3 bucket
 Resources:
-  HelloWorldFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  CreateLogFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      CodeUri: hello-world/
+      CodeUri: event-handlers/create-log/
       Handler: app.lambdaHandler
       Runtime: nodejs14.x
       Architectures:
       - x86_64
       Events:
-        HelloWorld:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+        CreateLogApi:
+          Type: Api
           Properties:
-            Path: /hello
-            Method: get
-    Metadata: # Manage esbuild properties
+            Path: /logs
+            Method: post
+      Environment:
+        Variables:
+          BUCKET_NAME: log-files
+    Metadata:
       BuildMethod: esbuild
       BuildProperties:
         Minify: true
         Target: es2020
-        Sourcemap: true # Enabling source maps will create the required NODE_OPTIONS environment variables on your lambda function during sam build
+        Sourcemap: true
         EntryPoints:
         - app.ts
+        External:
+        - "aws-sdk"
+        - "moment"
+  GetLogFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: get-log/
+      Handler: app.lambdaHandler
+      Runtime: nodejs14.x
+      Architectures:
+      - x86_64
+      Events:
+        GetLogApi:
+          Type: Api
+          Properties:
+            Path: /logs/{group}
+            Method: get
+      Environment:
+        Variables:
+          BUCKET_NAME: log-files
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        EntryPoints:
+        - app.ts
+        External:
+        - "aws-sdk"
+        - "moment"
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
@@ -51,16 +88,44 @@ Resources:
       ResourceGroupName:
         Ref: ApplicationResourceGroup
       AutoConfigurationEnabled: 'true'
+
+  LogTrackerFunctionIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-LogTrackerFunctionRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      
+
+      Policies:
+        - PolicyName: LogTrackerFunctionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource: !Sub 'arn:aws:s3:::${BucketName}/*'
+
 Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  HelloWorldApi:
-    Description: API Gateway endpoint URL for Prod stage for Hello World function
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
-  HelloWorldFunction:
-    Description: Hello World Lambda Function ARN
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
-    Description: Implicit IAM Role created for Hello World function
-    Value: !GetAtt HelloWorldFunctionRole.Arn
+  LogTrackerApi:
+    Description: API Gateway endpoint URL for Prod stage for Log Tracker function
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/logs/"
+  CreateLogFunction:
+    Description: Create Log Lambda Function ARN
+    Value: !GetAtt CreateLogFunction.Arn
+  GetLogFunction:
+    Description: Get Log Lambda Function ARN
+    Value: !GetAtt GetLogFunction.Arn
+  LogTrackerFunctionIamRole:
+    Description: Implicit IAM Role created for Log Tracker functions
+    Value: !GetAtt LogTrackerFunctionIamRole.Arn
+
+
